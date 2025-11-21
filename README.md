@@ -1,33 +1,32 @@
 
 SmartRF HomeKit Bridge
 
-Control any cheap 433 MHz RF lights using a Raspberry Pi, FastAPI, pigpio, and Homebridge — fully Siri compatible, no cloud, no subscription, no custom hardware beyond one TX module.
+Control any cheap 433 MHz RF lights using a Raspberry Pi, FastAPI, pigpio, and Homebridge — fully Siri-enabled and 100% local.
 
-This project replaces a physical RF remote (e.g., GY-RC01) and exposes every button (Power, White Set, Color Change, Brightness Up/Down, etc.) as tappable buttons or switches in the Apple Home app, usable with Siri, automation, and scenes.
+This project replaces a physical RF remote (like GY-RC01) and exposes all buttons (Power, Brightness, Color Change, etc.) as Apple Home Kit accessories.
 
 ⸻
 
 ⭐ Features
 
-✔ Works with any 433 MHz non-rolling code light remote
-✔ Fully compatible with Apple Home / Siri
-✔ Web API using FastAPI
-✔ Native RF transmission using pigpio waveforms
-✔ Supports multiple buttons, including dimming and mode buttons
-✔ Homebridge plugin configuration included
-✔ 100% local, private, no cloud
-✔ Uses a cheap FS1000A TX + XY-MK-5V RX
+✔ Fully works with Apple Home, Siri, Automations, Scenes
+✔ Web API powered by FastAPI
+✔ Raw RF waveform replay using pigpio
+✔ Supports any number of buttons
+✔ Works with FS1000A TX and XY-MK-5V RX
+✔ Fully offline — no cloud, no internet required
+✔ Very cheap hardware (less than €5)
 
 ⸻
 
 📦 Hardware Required
 
-Item	Price	Notes
-Raspberry Pi (any model with GPIO)	–	Pi 3A+, 3B, 4, Zero 2 all work
+Component	Price	Notes
+Raspberry Pi (any with GPIO)	–	Pi 3A+/3B/4/Zero 2
 433 MHz RX (XY-MK-5V)	€2	For capturing signals
 433 MHz TX (FS1000A)	€2	For transmitting signals
-17 cm wire	Free	Used as the antenna for TX
-Jumper wires	–	Female-to-female recommended
+Jumper wires	€2	Female-to-female
+17 cm wire	Free	Antenna for TX
 
 
 ⸻
@@ -65,53 +64,44 @@ Jumper wires	–	Female-to-female recommended
 
 ⸻
 
-📡 System Architecture
+📡 System Architecture Overview
 
-                ┌────────────────────────────┐
-                │     Apple Home / Siri      │
-                │  (Voice, Home App, Scenes) │
-                └──────────────┬─────────────┘
-                               │
-                               ▼
-                     ┌──────────────────┐
-                     │   Homebridge     │
-                     │  HTTP-SWITCH     │
-                     └─────────┬────────┘
-                               │ HTTP POST
-                               ▼
-                   ┌──────────────────────────┐
-                   │   FastAPI RF Server      │
-                   │  http://pi:8000/btn/...  │
-                   └───────────┬─────────────┘
-                               │
-                    Calls send_raw.py
-                               │
-                               ▼
-                   ┌──────────────────────────┐
-                   │      pigpio Waveform     │
-                   │   (Replays captured RF)  │
-                   └───────────┬─────────────┘
-                               │ GPIO 21
-                               ▼
-                     ┌────────────────────┐
-                     │ 433 MHz TX Module  │
-                     │     (FS1000A)      │
-                     └─────────┬──────────┘
-                               │ RF 433 MHz
-                               ▼
-                    ┌─────────────────────────┐
-                    │  Ceiling Lights / Lamp  │
-                    │  (Original RF Receiver) │
-                    └─────────────────────────┘
+          Apple Home / Siri
+       ┌─────────────────────┐
+       │ Scenes, Automations │
+       └──────────┬──────────┘
+                  │ HTTP POST
+                  ▼
+          Homebridge HTTP-SWITCH
+       ┌─────────────────────┐
+       │  homebridge plugin  │
+       └──────────┬──────────┘
+                  │
+                  ▼
+        FastAPI Server (Raspberry Pi)
+       ┌────────────────────────────┐
+       │ GET /buttons               │
+       │ POST /btn/<button>         │
+       └──────────┬─────────────────┘
+                  │ Shell call
+                  ▼
+           send_raw.py (pigpio)
+       ┌────────────────────────────┐
+       │ 433 MHz waveform replay    │
+       └──────────┬─────────────────┘
+                  │ GPIO21
+                  ▼
+            FS1000A RF Transmitter
+                  │
+                  ▼
+          Your 433 MHz Light Receiver
 
 
 ⸻
 
-🎯 Step 1 — Capture the RF Signals
+🎯 Step 1 — Capture RF Signals
 
-Create & run:
-
-capture_button.py
+Create capture_button.py:
 
 import pigpio, time, json, sys
 
@@ -162,23 +152,25 @@ if frames:
 else:
     print("NO FRAME")
 
-Run this once per button:
+Run it:
 
-python capture_button.py
+python3 capture_button.py
 
-Examples:
+Do this for each button:
 
-Button name → saved JSON
-	•	power → clean_power.json
-	•	bright_up → clean_bright_up.json
-	•	color_change → clean_color_change.json
-	•	etc.
+Button	File generated
+power	clean_power.json
+bright_up	clean_bright_up.json
+bright_down	clean_bright_down.json
+color_change	clean_color_change.json
+white	clean_set_color_white.json
+
 
 ⸻
 
-🚀 Step 2 — Sending RF (Replay Waveform)
+🚀 Step 2 — Send RF Signals
 
-send_raw.py
+send_raw.py:
 
 import pigpio, time, json, sys
 
@@ -203,7 +195,7 @@ cur = 1
 
 for lvl, dt in pulses:
     dt = int(dt)
-    lvl = 1 - lvl  # invert
+    lvl = 1 - lvl  # invert levels
 
     if lvl != cur:
         if lvl == 1:
@@ -231,50 +223,84 @@ pi.wave_delete(wid)
 pi.write(TX_PIN, 0)
 pi.stop()
 
-Send a command manually:
+To test:
 
-python send_raw.py power
-python send_raw.py color_change
-python send_raw.py bright_up
+python3 send_raw.py power
+python3 send_raw.py bright_up
+python3 send_raw.py color_change
 
 
 ⸻
 
 🌐 Step 3 — FastAPI Web Server
 
-main.py
+Create FastAPI server main.py:
 
 from fastapi import FastAPI
-import subprocess, json, os
+import subprocess, os
 
 app = FastAPI()
 
 @app.get("/buttons")
 def list_buttons():
-    files = [f.replace("clean_","").replace(".json","")
-             for f in os.listdir()
-             if f.startswith("clean_")]
-    return {"buttons": files}
+    return {
+        "buttons": [
+            f.replace("clean_", "").replace(".json", "")
+            for f in os.listdir()
+            if f.startswith("clean_")
+        ]
+    }
 
 @app.post("/btn/{name}")
 def press(name: str):
     subprocess.Popen(["python3", "send_raw.py", name])
     return {"status": "ok", "button": name}
 
-Run API:
+Run:
 
 uvicorn main:app --host 0.0.0.0 --port 8000
 
 
 ⸻
 
-🏠 Step 4 — Homebridge Configuration
+🛠 Step 4 — Systemd Service (Autostart)
+
+/etc/systemd/system/rf-api.service
+
+[Unit]
+Description=RF Smart Light FastAPI server
+After=network.target pigpiod.service
+Wants=pigpiod.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/smartLight/web-server
+Environment="PATH=/root/rfenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/root/rfenv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+
+Enable it:
+
+sudo systemctl daemon-reload
+sudo systemctl enable rf-api
+sudo systemctl start rf-api
+
+
+⸻
+
+🏠 Step 5 — Homebridge Setup
 
 Install plugin:
 
 npm install -g homebridge-http-switch
 
-Add to config.json:
+Your config.json:
 
 {
   "bridge": {
@@ -292,7 +318,6 @@ Add to config.json:
       "switchType": "stateless",
       "httpMethod": "POST"
     },
-
     {
       "accessory": "HTTP-SWITCH",
       "name": "Main Brightness Up",
@@ -300,10 +325,16 @@ Add to config.json:
       "switchType": "stateless",
       "httpMethod": "POST"
     },
-
     {
       "accessory": "HTTP-SWITCH",
-      "name": "Main Color Change",
+      "name": "Main Brightness Down",
+      "onUrl": "http://10.0.0.91:8000/btn/bright_down",
+      "switchType": "stateless",
+      "httpMethod": "POST"
+    },
+    {
+      "accessory": "HTTP-SWITCH",
+      "name": "Color Change",
       "onUrl": "http://10.0.0.91:8000/btn/color_change",
       "switchType": "stateless",
       "httpMethod": "POST"
@@ -313,16 +344,14 @@ Add to config.json:
   "platforms": []
 }
 
-🟢 Stateless = tap button, auto resets
-Perfect for brightness + color buttons.
 
 ⸻
 
-🎉 Result
+🎉 Final Result
 
 You now have:
-	•	Fully working HomeKit controls
-	•	Siri voice commands
-	•	A web API
-	•	RF replay that matches your physical remote
-	•	No cloud, local-only automation
+	•	Fully working RF → Siri → HomeKit control
+	•	All buttons exposed as tappable HomeKit tiles
+	•	Smooth brightness, color, power control
+	•	Entire system runs automatically on Pi boot
+	•	Cheap hardware and completely local control
