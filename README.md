@@ -302,6 +302,127 @@ Homebridge will show them as tappable buttons in HomeKit.
 
 ⸻
 
+Bonus: Make Everything Start Automatically On Boot
+
+Right now:
+	•	pigpiod (the GPIO daemon)
+	•	your FastAPI server (server.py)
+
+only run if you start them manually.
+If the Raspberry Pi restarts, nothing comes back by itself.
+
+To fix that, we create simple systemd services so the Pi automatically starts the RF stack on boot.
+
+We will create two services:
+	1.	pigpiod.service – GPIO daemon for pigpio
+	2.	rf-api.service – your FastAPI web server (the one Homebridge talks to)
+
+Note: Homebridge usually installs its own service, so we don’t touch that here.
+
+⸻
+
+1. pigpiod systemd service
+
+If pigpiod is already starting for you automatically, you can skip this.
+If not, create this file:
+
+sudo nano /etc/systemd/system/pigpiod.service
+
+Paste this:
+```
+[Unit]
+Description=Pigpio daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pigpiod
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+Save and enable it:
+```
+sudo systemctl daemon-reload
+sudo systemctl enable pigpiod
+sudo systemctl start pigpiod
+```
+You can check:
+```
+sudo systemctl status pigpiod
+```
+If it says “active (running)”, you are good.
+
+⸻
+
+2. FastAPI RF server as a service
+
+This is the piece that serves /btn/power, /btn/bright_up, etc.
+
+I’ll assume:
+	•	Your code lives in: /root/smartLight
+	•	server.py is in that folder
+	•	You are running uvicorn server:app --host 0.0.0.0 --port 8000
+	•	You are using a virtualenv at /root/rfenv (adapt if different)
+
+Create the service file:
+
+sudo nano /etc/systemd/system/rf-api.service
+
+Paste this:
+```
+[Unit]
+Description=RF Smart Light FastAPI server
+After=network.target pigpiod.service
+Wants=pigpiod.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/root/smartLight
+Environment="PATH=/root/rfenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/root/rfenv/bin/uvicorn server:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+Adjust WorkingDirectory, PATH, or ExecStart if your paths are different.
+
+Enable and start it:
+```
+sudo systemctl daemon-reload
+sudo systemctl enable rf-api
+sudo systemctl start rf-api
+```
+Check status:
+```
+sudo systemctl status rf-api
+```
+If it is “active (running)” and you can still do:
+```
+curl -X POST http://YOUR_PI_IP:8000/btn/power
+```
+then your API is now fully managed by systemd.
+
+⸻
+
+3. What you get from this
+
+After this:
+	•	When the Pi reboots, pigpiod starts automatically
+	•	The FastAPI server starts automatically
+	•	Homebridge reconnects and can immediately hit /btn/...
+	•	You never have to SSH in just to “start the script again”
+
+From this point, the whole setup behaves like a real “smart device”, not just a weekend experiment.
+
+⸻
+
 Use Siri Commands
 
 Once added:
@@ -312,6 +433,7 @@ Once added:
 ```
 
 ⸻
+
 
 This Works With ANY 433 MHz Remote
 
