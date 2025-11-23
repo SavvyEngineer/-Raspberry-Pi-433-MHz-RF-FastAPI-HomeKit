@@ -49,6 +49,8 @@ Wiring Diagram (Important!)
 
 433 MHz modules are sensitive. Correct wiring matters.
 
+```
+
 Receiver (RXB6)
 
 RXB6      → Raspberry Pi
@@ -67,12 +69,14 @@ GND       → GND
 DATA      → GPIO 21
 ANT       → 17 cm wire (recommended)
 
+```
+
 Both modules share the same ground — if you forget this, nothing works.
 
 ⸻
 
 System Diagram
-
+```
        [ 433 MHz Remote ]
                 |
                 | Capture pulses
@@ -90,7 +94,7 @@ System Diagram
                 | Send RF command
                 v
          [ Your Light / Device ]
-
+```
 
 ⸻
 
