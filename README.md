@@ -1,65 +1,102 @@
+Raspberry Pi 433 MHz RF → FastAPI → HomeKit
 
-📘 Raspberry Pi 433 MHz RF → FastAPI → HomeKit (Siri Control)
+Control Any 433 MHz Remote-Controlled Light With Siri
 
-Control cheap 433 MHz RF lights using a Raspberry Pi, FastAPI, and Apple HomeKit via Homebridge.
-
-This project lets you:
+This project lets you take any cheap 433 MHz RF light (or any RF remote) and turn it into a smart light you can control with:
 ```
-	•	Capture your RF remote signals
-	•	Replay them from the Pi
-	•	Expose them as a local HTTP API
-	•	Control everything using Siri (“Hey Siri, turn on the lights”)
-	•	Add brightness buttons, color-change buttons, or power buttons
+	•	Your phone
+	•	Siri (“Hey Siri, turn on the lights”)
+	•	HomeKit automations
+	•	A simple web API
 ```
 
-⭐ This project works with any 433 MHz RF remote
-
-As long as your device uses 433 MHz ASK/OOK radio signals (which most cheap remotes do), you can capture the button presses, save them as JSON pulse files, and replay them from your Raspberry Pi , meaning you can replace the original remote entirely with Siri, HomeKit, or automation.	
+The Raspberry Pi records the RF signals from your original remote and later replays them exactly, so you don’t have to decode or understand any protocols.
+If your remote uses 433 MHz ASK/OOK (which 99% of cheap remotes do), this works.
 
 ⸻
 
-🖼 System Diagram
+Why This Works
 
-        ┌──────────────────┐
-        │ 433 MHz Remote   │
-        └───────┬──────────┘
-                │ (sniff)
-                ▼
-    ┌──────────────────────────┐
-    │ Raspberry Pi + RX Module │
-    └───────┬──────────────────┘
-            │ Capture JSON pulse files
-            ▼
-    ┌──────────────────────────┐
-    │   FastAPI Web Server     │
-    └───────┬──────────────────┘
-            │ HTTP POST /btn/power
-            ▼
-    ┌──────────────────────────┐
-    │   TX Module (433 MHz)    │
-    └───────┬──────────────────┘
-            │ Sends RF command
-            ▼
-    ┌──────────────────────────┐
-    │    Light / Device        │
-    └──────────────────────────┘
+Most cheap 433 MHz remotes aren’t secure.
+They simply send a burst of high/low pulses with very specific timing (microseconds).
+If you capture those timings and replay them with good accuracy, the light behaves exactly like you pressed the original remote.
 
+This project:
+```
+	1.	Captures the raw pulses from your remote using a 433 MHz receiver
+	2.	Saves them to JSON files
+	3.	Lets the Raspberry Pi simulate the remote using a transmitter
+	4.	Wraps everything in a FastAPI server
+	5.	Integrates it into HomeKit via Homebridge
+	6.	Lets you replace the remote entirely
+```
 
 ⸻
 
-📡 Hardware Needed
-	•	Raspberry Pi (Zero, 3, 4, anything works)
-	•	433 MHz RXB6 receiver
-	•	433 MHz FS1000A transmitter
+Hardware Required
+```
+	•	Raspberry Pi (Zero, 3, 4 — anything works)
+	•	RXB6 433 MHz Receiver
+	•	FS1000A 433 MHz Transmitter
 	•	Jumper wires
 	•	Your original RF remote
-	•	Optional: USB power supply with good stability
+	•	Optional: a 17 cm copper wire as antenna (makes range 10× better)
+```
 
 ⸻
 
-🛠 Step 1 — Install pigpio
+Wiring Diagram (Important!)
 
+433 MHz modules are sensitive. Correct wiring matters.
+
+Receiver (RXB6)
+
+RXB6      → Raspberry Pi
+-------------------------
+VCC (5V)  → 5V pin
+GND       → GND
+DATA      → GPIO 20
+ANT       → 17 cm wire (optional but recommended)
+
+Transmitter (FS1000A)
+
+FS1000A   → Raspberry Pi
+-------------------------
+VCC       → 5V
+GND       → GND
+DATA      → GPIO 21
+ANT       → 17 cm wire (recommended)
+
+Both modules share the same ground — if you forget this, nothing works.
+
+⸻
+
+System Diagram
+
+       [ 433 MHz Remote ]
+                |
+                | Capture pulses
+                v
+   [ Raspberry Pi + RXB6 Receiver ]
+                |
+                | Save JSON pulses
+                v
+        [ FastAPI Web Server ]
+                |
+                | HTTP /btn/power
+                v
+   [ FS1000A 433 MHz Transmitter ]
+                |
+                | Send RF command
+                v
+         [ Your Light / Device ]
+
+
+⸻
+
+Step 1 — Install pigpio
 ```
+
 sudo apt update
 sudo apt install pigpio python3-pigpio
 sudo systemctl enable pigpiod
@@ -69,19 +106,21 @@ sudo systemctl start pigpiod
 
 ⸻
 
-🧲 Step 2 — Capture Remote Buttons
+Step 2 — Capture Remote Buttons
 
-This script captures a full RF frame (no splitting) and saves it as clean_<button>.json.
+This script records a full RF frame, stores it in clean_<name>.json, and keeps all pulses intact so the Pi can replay them accurately.
 
-📌 capture_button.py
+capture_button.py
+
 ```
 import pigpio, time, json
 
 RX_PIN = 20
-GAP_US = 15000
+GAP_US = 15000  # frame break
 
 pi = pigpio.pi()
 pi.set_mode(RX_PIN, pigpio.INPUT)
+pi.set_pull_up_down(RX_PIN, pigpio.PUD_OFF)
 pi.set_glitch_filter(RX_PIN, 50)
 
 frames = []
@@ -121,16 +160,18 @@ if frames:
 else:
     print("NO FRAME")
 
-```
+Run it for each button:
 
+python3 capture_button.py
+```
 
 ⸻
 
-🚀 Step 3 — Send RF Signals
+Step 3 — Send RF Signals
 
-This script replays the captured JSON pulses exactly as recorded.
+The Pi sends the pulses exactly as recorded, with the correct inverted idle level.
 
-📌 send_raw.py
+send_raw.py
 
 ```
 import pigpio, time, json, sys
@@ -150,7 +191,7 @@ cur = 1
 
 for lvl, dt in pulses:
     dt = int(dt)
-    lvl = 1 - lvl  # invert
+    lvl = 1 - lvl  # invert signal
 
     if lvl != cur:
         if lvl == 1:
@@ -167,7 +208,7 @@ if cur == 1:
 pi.wave_add_generic(wf)
 wid = pi.wave_create()
 
-print(f"Sending {filename}…")
+print(f"Sending {filename}")
 for _ in range(REPEATS):
     pi.wave_send_once(wid)
     while pi.wave_tx_busy():
@@ -177,13 +218,19 @@ for _ in range(REPEATS):
 pi.wave_delete(wid)
 pi.write(TX_PIN, 0)
 pi.stop()
+
 ```
+
+Test it:
+
+python3 send_raw.py clean_power.json
+
 
 ⸻
 
-🌐 Step 4 — FastAPI HTTP Server
+Step 4 — Run the FastAPI Web Server
 
-📌 server.py
+server.py
 
 ```
 from fastapi import FastAPI
@@ -192,32 +239,30 @@ import subprocess
 app = FastAPI()
 
 @app.post("/btn/{name}")
-def press_button(name: str):
-    file = f"clean_{name}.json"
-    subprocess.call(["python3", "send_raw.py", file])
+def btn(name: str):
+    subprocess.call(["python3", "send_raw.py", f"clean_{name}.json"])
     return {"status": "ok", "button": name}
 
-Run it:
+Start the API:
 
 uvicorn server:app --host 0.0.0.0 --port 8000
-```
+
+Now you can test:
+
+curl -X POST http://YOUR_PI_IP:8000/btn/power
+
 
 ⸻
 
-🍎 Step 5 — HomeKit via Homebridge
+Step 5 — Add HomeKit Support with Homebridge
 
-Install plugin:
-```
+Install the plugin:
+
 sudo npm install -g homebridge-http-switch
-```
 
-⸻
+Your config.json section:
 
-🏡 Example Homebridge config
-
-✔ Power button (stateless)
-
-```
+Power Button
 
 {
   "accessory": "HTTP-SWITCH",
@@ -227,7 +272,7 @@ sudo npm install -g homebridge-http-switch
   "httpMethod": "POST"
 }
 
-✔ Brightness Up (as a button)
+Brightness Up
 
 {
   "accessory": "HTTP-SWITCH",
@@ -237,34 +282,34 @@ sudo npm install -g homebridge-http-switch
   "httpMethod": "POST"
 }
 
-✔ Color Change Button
+Color Change
 
 {
   "accessory": "HTTP-SWITCH",
-  "name": "Color Change (Main)",
+  "name": "Color Change",
   "switchType": "stateless",
   "onUrl": "http://10.0.0.91:8000/btn/color_change",
   "httpMethod": "POST"
 }
-
 ```
 
+Homebridge will show them as tappable buttons in HomeKit.
 
 ⸻
 
-🗣 Use Siri
-	•	“Hey Siri, turn on the main lights”
-	•	“Hey Siri, increase brightness in the living room”
+Use Siri Commands
+
+Once added:
+```
+	•	“Hey Siri, turn on the lights”
+	•	“Hey Siri, increase the brightness”
 	•	“Hey Siri, change the light color”
+```
 
 ⸻
 
-🎉 That’s it!
+This Works With ANY 433 MHz Remote
 
-You’re now controlling super-cheap 433 MHz RF lights through:
-	•	Raspberry Pi
-	•	FastAPI
-	•	Homebridge
-	•	HomeKit
-	•	Siri
+It doesn’t matter what brand your lights are.
 
+If they use 433 MHz RF (most remotes do), this method lets the Raspberry Pi clone the remote and act as a fully-featured smart controller.
