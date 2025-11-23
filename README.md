@@ -1,28 +1,3 @@
-Got you — the problem is NOT your code… it’s the Markdown formatting on GitHub.
-
-Your screenshot shows the code snippet being treated as inline text because the backticks are broken or nested incorrectly.
-
-Also, your README is currently written for engineers — you said you want it to be understandable for non-tech people, so I’ll rewrite it much more simply and fix all formatting so GitHub renders it correctly.
-
-⸻
-
-✅ Here is your fully rewritten, clean, non-tech-friendly, GitHub-proper README
-
-✔ Proper code blocks
-
-✔ No wrapped / broken backticks
-
-✔ Clean explanations
-
-✔ Diagrams included
-
-✔ Clear setup steps
-
-✔ Beginner-friendly
-
-✔ Works perfectly with FastAPI + HomeKit + Raspberry Pi
-
-⸻
 
 📘 Raspberry Pi 433 MHz RF → FastAPI → HomeKit (Siri Control)
 
@@ -78,10 +53,12 @@ This project lets you:
 
 🛠 Step 1 — Install pigpio
 
+```
 sudo apt update
 sudo apt install pigpio python3-pigpio
 sudo systemctl enable pigpiod
 sudo systemctl start pigpiod
+```
 
 
 ⸻
@@ -91,7 +68,7 @@ sudo systemctl start pigpiod
 This script captures a full RF frame (no splitting) and saves it as clean_<button>.json.
 
 📌 capture_button.py
-
+```
 import pigpio, time, json
 
 RX_PIN = 20
@@ -138,6 +115,8 @@ if frames:
 else:
     print("NO FRAME")
 
+```
+
 
 ⸻
 
@@ -147,6 +126,7 @@ This script replays the captured JSON pulses exactly as recorded.
 
 📌 send_raw.py
 
+```
 import pigpio, time, json, sys
 
 TX_PIN = 21
@@ -191,7 +171,7 @@ for _ in range(REPEATS):
 pi.wave_delete(wid)
 pi.write(TX_PIN, 0)
 pi.stop()
-
+```
 
 ⸻
 
@@ -199,6 +179,7 @@ pi.stop()
 
 📌 server.py
 
+```
 from fastapi import FastAPI
 import subprocess
 
@@ -213,22 +194,24 @@ def press_button(name: str):
 Run it:
 
 uvicorn server:app --host 0.0.0.0 --port 8000
-
+```
 
 ⸻
 
 🍎 Step 5 — HomeKit via Homebridge
 
 Install plugin:
-
+```
 sudo npm install -g homebridge-http-switch
-
+```
 
 ⸻
 
 🏡 Example Homebridge config
 
 ✔ Power button (stateless)
+
+```
 
 {
   "accessory": "HTTP-SWITCH",
@@ -258,6 +241,8 @@ sudo npm install -g homebridge-http-switch
   "httpMethod": "POST"
 }
 
+```
+
 
 ⸻
 
@@ -277,14 +262,3 @@ You’re now controlling super-cheap 433 MHz RF lights through:
 	•	HomeKit
 	•	Siri
 
-⸻
-
-Want me to:
-
-✅ Generate a full API documentation section?
-✅ Add animated diagrams?
-✅ Add wiring images?
-✅ Add installation script (install.sh)?
-✅ Turn this into a full blog post or Medium article?
-
-Just tell me.
