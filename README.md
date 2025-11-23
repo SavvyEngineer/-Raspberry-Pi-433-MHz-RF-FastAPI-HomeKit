@@ -10,6 +10,10 @@ This project lets you:
 	•	Control everything using Siri (“Hey Siri, turn on the lights”)
 	•	Add brightness buttons, color-change buttons, or power buttons
 
+⭐ This project works with any 433 MHz RF remote
+
+As long as your device uses 433 MHz ASK/OOK radio signals (which most cheap remotes do), you can capture the button presses, save them as JSON pulse files, and replay them from your Raspberry Pi , meaning you can replace the original remote entirely with Siri, HomeKit, or automation.	
+
 ⸻
 
 🖼 System Diagram
