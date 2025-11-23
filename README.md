@@ -4,11 +4,13 @@
 Control cheap 433 MHz RF lights using a Raspberry Pi, FastAPI, and Apple HomeKit via Homebridge.
 
 This project lets you:
+```
 	•	Capture your RF remote signals
 	•	Replay them from the Pi
 	•	Expose them as a local HTTP API
 	•	Control everything using Siri (“Hey Siri, turn on the lights”)
 	•	Add brightness buttons, color-change buttons, or power buttons
+```
 
 ⭐ This project works with any 433 MHz RF remote
 
