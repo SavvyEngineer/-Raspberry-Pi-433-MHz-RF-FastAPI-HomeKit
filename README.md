@@ -246,28 +246,29 @@ app = FastAPI()
 def btn(name: str):
     subprocess.call(["python3", "send_raw.py", f"clean_{name}.json"])
     return {"status": "ok", "button": name}
+```
 
 Start the API:
-
+```
 uvicorn server:app --host 0.0.0.0 --port 8000
-
+```
 Now you can test:
-
+```
 curl -X POST http://YOUR_PI_IP:8000/btn/power
-
+```
 
 ⸻
 
 Step 5 — Add HomeKit Support with Homebridge
 
 Install the plugin:
-
+```
 sudo npm install -g homebridge-http-switch
-
+```
 Your config.json section:
 
 Power Button
-
+```
 {
   "accessory": "HTTP-SWITCH",
   "name": "Main Lights Power",
